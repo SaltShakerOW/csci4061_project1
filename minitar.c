@@ -124,7 +124,63 @@ int remove_trailing_bytes(const char *file_name, size_t nbytes) {
 }
 
 int create_archive(const char *archive_name, const file_list_t *files) {
-    // TODO: Not yet implemented
+    //*files is a linked list of node_t nodes (see file_list.h)
+    //*archive_name is a null terminated array of characters that specifies the file name
+
+    if (archive_name == NULL) {    // check if archive_name is not null
+        printf("Archive name does not exist");
+        return -1;
+    }
+
+    // Step 1: Open the file we want to create (and check for errors)
+
+    FILE *f = fopen(archive_name, "w");
+    if (f == NULL) {
+        printf("Failed to open file\n");
+        return -1;
+    }
+
+    // Step 2: Iterate through the file names provided to us in each node of *files
+    if (files != NULL) {
+        node_t *current = files->head;
+        while (current != NULL) {
+            //**Three things need to happen once we get the file name**
+            // 1. We need to access the data of this file
+            // 2. We need to create and add a 512 byte chunk of header data to the archive using the
+            // tar_header struct (NEEDS TO BE 512 BYTES)
+            // 3. We need to fill the archive with real data blocks (512 bytes also) from the file
+            // until we reach the end (ALSO NEEDS TO BE 512 BYTES)
+
+            // Step 1:
+            char *file_name = current->name;    // Get file name
+            if (strlen(file_name) == 0) {       // Check if file_name is a valid one (aka not empty)
+                printf("Encountered a file without a name. Moving on...\n");
+                current = current->next;
+                continue;
+            }
+            FILE *data = fopen(file_name, "r");    // open file named in the file_list
+            if (data == NULL) {                    // Check if open operation returned usable data
+                printf("Could not open file:", file_name);
+                printf(". Moving on...\n");
+                current = current->next;
+                continue;
+            }
+
+            // Step 2: TODO
+
+            // Step 3: TODO
+
+            current =
+                current->next;    // Get the next node in the file list if everything goes right...
+        }
+    } else {    // Error check to see if files linked list has any elements
+        printf("No files were included");
+        fclose(f);
+        return -1;
+    }
+
+    fclose(f);
+
     return 0;
 }
 
