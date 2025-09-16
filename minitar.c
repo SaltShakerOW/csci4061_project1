@@ -166,10 +166,33 @@ int create_archive(const char *archive_name, const file_list_t *files) {
                 continue;
             }
 
-            // Step 2: TODO
+            // Step 2:
 
-            // Step 3: TODO
+            // Step 3:
+            char buffer[512];     // read file => buffer => archive
+            size_t read_bytes;    // need this for checking when we reached the 512 bytes
 
+            read_bytes = fread(buffer, 1, 512, data);    // store provided data in the buffer
+            while (read_bytes == 512) {    // loop until we read out less than a full buffer
+                size_t written = fwrite(buffer, 1, 512, f);    // write from buffer to archive
+                if (written != read_bytes) {
+                    printf("File write error. Moving on to next file...");
+                    break;
+                }
+
+                read_bytes = fread(buffer, 1, 512, data);
+            }
+
+            if (read_bytes > 0) {    // final read/write operation is done outside of loop because
+                                     // loop breaks if the read is less than 512 bytes
+                size_t written = fwrite(buffer, 1, 512, f);
+                if (written != read_bytes) {
+                    printf("File write error. Moving on to next file...");
+                    break;
+                }
+            }
+
+            fclose(data);
             current =
                 current->next;    // Get the next node in the file list if everything goes right...
         }
