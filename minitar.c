@@ -166,17 +166,36 @@ int create_archive(const char *archive_name, const file_list_t *files) {
                 continue;
             }
 
-            // Step 2:
-
-            // Step 3:
             char buffer[512];     // read file => buffer => archive
             size_t read_bytes;    // need this for checking when we reached the 512 bytes
+
+            // Step 2:
+            tar_header header;
+            int header_check = fill_tar_header(&header, file_name);
+            if (header_check == -1) {
+                printf("Error occured while filling header. Moving on to next file...\n");
+                fclose(data);
+                current = current->next;
+                continue;
+            }
+            size_t header_write = fwrite(&header, 1, 512, f);
+            if (header_write != 512) {
+                printf(
+                    "Error occured while writing header to file (not 512 bytes written). Moving on "
+                    "to next file...\n");
+                fclose(data);
+                current = current->next;
+                continue;
+            }
+
+            // Step 3:
 
             read_bytes = fread(buffer, 1, 512, data);    // store provided data in the buffer
             while (read_bytes == 512) {    // loop until we read out less than a full buffer
                 size_t written = fwrite(buffer, 1, 512, f);    // write from buffer to archive
                 if (written != read_bytes) {
                     printf("File write error. Moving on to next file...");
+                    fclose(data);
                     break;
                 }
 
@@ -186,8 +205,14 @@ int create_archive(const char *archive_name, const file_list_t *files) {
             if (read_bytes > 0) {    // final read/write operation is done outside of loop because
                                      // loop breaks if the read is less than 512 bytes
                 size_t written = fwrite(buffer, 1, 512, f);
+
+                // May need to insert some kind of byte filler here. I think fwrite will write 512
+                // bytes of *something*, but it might need to be like specifically zeros or
+                // something.
+
                 if (written != read_bytes) {
                     printf("File write error. Moving on to next file...");
+                    fclose(data);
                     break;
                 }
             }
