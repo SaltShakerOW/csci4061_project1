@@ -227,12 +227,23 @@ int create_archive(const char *archive_name, const file_list_t *files) {
         return -1;
     }
 
-    fclose(f);
+    // Forgot I need to add a two-block footer to the archive. This should be done below.
+    // This needs to be two blocks of just zeros
+    int zero_block[1024] = {0};
 
+    size_t zero_count = fwrite(zero_block, 1, 1024, f);
+    if (zero_count == 1024) {
+        printf("Error writing the two footer trailing blocks.\n");
+        fclose(f);
+        return -1;
+    }
+
+    fclose(f);    // success state
     return 0;
 }
 
-int append_files_to_archive(const char *archive_name, const file_list_t *files) {
+int append_files_to_archive(const char *archive_name,
+                            const file_list_t *files) {    // reuse this code for update
     // TODO: Not yet implemented
     return 0;
 }
