@@ -1,3 +1,0 @@
-$ rm -f hello.txt
-$ exit
-exit

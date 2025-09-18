@@ -1,2 +1,0 @@
-$ cp test_cases/resources/large.bin .
-$ exit

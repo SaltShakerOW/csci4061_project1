@@ -160,7 +160,7 @@ int create_archive(const char *archive_name, const file_list_t *files) {
             }
             FILE *data = fopen(file_name, "r");    // open file named in the file_list
             if (data == NULL) {                    // Check if open operation returned usable data
-                printf("Could not open file:", file_name);
+                printf("Could not open file: %s", file_name);
                 printf(". Moving on...\n");
                 current = current->next;
                 continue;
