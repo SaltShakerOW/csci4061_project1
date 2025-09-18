@@ -194,7 +194,7 @@ int create_archive(const char *archive_name, const file_list_t *files) {
             while (read_bytes == 512) {    // loop until we read out less than a full buffer
                 size_t written = fwrite(buffer, 1, 512, f);    // write from buffer to archive
                 if (written != read_bytes) {
-                    printf("File write error. Moving on to next file...");
+                    printf("File write error. Moving on to next file...\n");
                     fclose(data);
                     break;
                 }
@@ -204,16 +204,26 @@ int create_archive(const char *archive_name, const file_list_t *files) {
 
             if (read_bytes > 0) {    // final read/write operation is done outside of loop because
                                      // loop breaks if the read is less than 512 bytes
-                size_t written = fwrite(buffer, 1, 512, f);
-
-                // May need to insert some kind of byte filler here. I think fwrite will write 512
-                // bytes of *something*, but it might need to be like specifically zeros or
-                // something.
+                size_t written = fwrite(buffer, 1, read_bytes,
+                                        f);    // writes only the amount read (could need padding)
 
                 if (written != read_bytes) {
-                    printf("File write error. Moving on to next file...");
+                    printf("File write error. Moving on to next file...\n");
                     fclose(data);
                     break;
+                }
+
+                if (written < 512) {    // here it checks if we wrote less than 512 bytes to see if
+                                        // we need to pad
+                    int difference = 512 - read_bytes;    // calculate how many bytes are missing
+                    int pad[512] = {0};    // we may only write a portion of this array
+                    size_t written2 = fwrite(pad, 1, difference,
+                                             f);    // fill in the rest of the block with padding
+                    if (written2 != difference) {
+                        printf("Padding write error. Moving on to the next file...\n");
+                        fclose(data);
+                        break;
+                    }
                 }
             }
 
@@ -227,8 +237,8 @@ int create_archive(const char *archive_name, const file_list_t *files) {
         return -1;
     }
 
-    // Forgot I need to add a two-block footer to the archive. This should be done below.
-    // This needs to be two blocks of just zeros
+    // Extra step I forgot. Adding two 512 footer blocks to the end of the archive before we close
+    // out
     int zero_block[1024] = {0};
 
     size_t zero_count = fwrite(zero_block, 1, 1024, f);
