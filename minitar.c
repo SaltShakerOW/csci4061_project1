@@ -189,7 +189,6 @@ int create_archive(const char *archive_name, const file_list_t *files) {
             }
 
             // Step 3:
-
             read_bytes = fread(buffer, 1, 512, data);    // store provided data in the buffer
             while (read_bytes == 512) {    // loop until we read out less than a full buffer
                 size_t written = fwrite(buffer, 1, 512, f);    // write from buffer to archive
@@ -254,7 +253,125 @@ int create_archive(const char *archive_name, const file_list_t *files) {
 
 int append_files_to_archive(const char *archive_name,
                             const file_list_t *files) {    // reuse this code for update
-    // TODO: Not yet implemented
+    // Step 1: Open archive_name and figure out if it exists.
+    // Step 2: Remove the existing minitar footer to get at the end of the actual data
+    // Step 3: Append whatever data is in files to the archive using means established in
+    // create_archive. This includes header and data blocks for each file.
+    // Step 4: Reapply footer
+
+    // Step 1: Open file
+    FILE *f = fopen(archive_name, "w");
+    if (f == NULL) {
+        fprint("Failed to open archive in append function");
+        return -1;
+    }
+
+    // Step 2: Remove footers
+    int footer_status =
+        remove_trailing_bytes(archive_name, 1024);    // Remove 2 blocks worth of data
+    if (footer_status != 0) {
+        fprint("Failed to remove footer in append function");
+        fclose(f);
+        return -1;
+    }
+
+    // Step 3: Append data
+    if (files == NULL) {    // Check if user supplied files/if files exists at all
+        fprint("The provided file list is empty or doesn't exist.");
+        fclose(f);
+        return -1;
+    }
+
+    node_t *current = files->head;
+    while (current != NULL) {
+        char *file_name = current->name;    // Get file name
+        if (strlen(file_name) == 0) {       // Check if file_name is a valid one (aka not empty)
+            printf("Encountered a file without a name. Moving on...\n");
+            current = current->next;
+            continue;
+        }
+        FILE *data = fopen(file_name, "r");    // open file named in the file_list
+        if (data == NULL) {                    // Check if open operation returned usable data
+            printf("Could not open file:", file_name);
+            printf(". Moving on...\n");
+            current = current->next;
+            continue;
+        }
+
+        char buffer[512];     // read file => buffer => archive
+        size_t read_bytes;    // need this for checking when we reached the 512 bytes
+
+        tar_header header;
+        int header_check = fill_tar_header(&header, file_name);
+        if (header_check == -1) {
+            printf("Error occured while filling header. Moving on to next file...\n");
+            fclose(data);
+            current = current->next;
+            continue;
+        }
+        size_t header_write = fwrite(&header, 1, 512, f);
+        if (header_write != 512) {
+            printf(
+                "Error occured while writing header to file (not 512 bytes written). Moving on "
+                "to next file...\n");
+            fclose(data);
+            current = current->next;
+            continue;
+        }
+
+        // Step 3:
+        read_bytes = fread(buffer, 1, 512, data);    // store provided data in the buffer
+        while (read_bytes == 512) {    // loop until we read out less than a full buffer
+            size_t written = fwrite(buffer, 1, 512, f);    // write from buffer to archive
+            if (written != read_bytes) {
+                printf("File write error. Moving on to next file...\n");
+                fclose(data);
+                break;
+            }
+
+            read_bytes = fread(buffer, 1, 512, data);
+        }
+
+        if (read_bytes >
+            0) {    // final read/write operation is done outside of loop because
+                    // loop breaks if the read is less than 512 bytes, but is more than zero
+            size_t written = fwrite(buffer, 1, read_bytes,
+                                    f);    // writes only the amount read (could need padding)
+
+            if (written != read_bytes) {
+                printf("File write error. Moving on to next file...\n");
+                fclose(data);
+                break;
+            }
+
+            if (written < 512) {    // here it checks if we wrote less than 512 bytes to see if
+                                    // we need to pad
+                int difference = 512 - read_bytes;    // calculate how many bytes are missing
+                int pad[512] = {0};                   // we may only write a portion of this array
+                size_t written2 = fwrite(pad, 1, difference,
+                                         f);    // fill in the rest of the block with padding
+                if (written2 != difference) {
+                    printf("Padding write error. Moving on to the next file...\n");
+                    fclose(data);
+                    break;
+                }
+            }
+        }
+
+        current = current->next;
+    }
+
+    // Step 4: Reapply footer
+    int zero_block[1024] = {0};
+
+    size_t zero_count = fwrite(zero_block, 1, 1024, f);
+    if (zero_count == 1024) {
+        printf("Error writing the two footer trailing blocks.\n");
+        fclose(f);
+        return -1;
+    }
+
+    fclose(f);    // success state
     return 0;
 }
 
