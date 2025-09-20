@@ -376,7 +376,93 @@ int append_files_to_archive(const char *archive_name,
 }
 
 int get_archive_file_list(const char *archive_name, file_list_t *files) {
-    // TODO: Not yet implemented
+    // Here we need to parse the tar file, looking for headers to extract the names of the files
+    // from.
+
+    // Step 1: Need to open the archive (again)
+
+    // Step 2: Assuming the first data block is a header, we can get the file size from said header
+    // and use fseek to skip over the datablocks to find the next header block
+
+    FILE *f = fopen(archive_name, "r");
+    if (f == NULL) {
+        printf("Failed to open archive in get_archive_file_list");
+        return -1;
+    }
+
+    tar_header header;
+    node_t *current = NULL;
+
+    if (files->head != NULL) {
+        node_t *current = files->head;
+        while (current != NULL) {
+            current = current->next;    // traverse ll until we get to end
+        }
+    }
+
+    while (1) {    // infinite loop here to indefinitely scan file until footer is reached or error
+                   // is met during scan
+        size_t read_bytes =
+            fread(&header, 1, 512, f);    // scan (assumed) header block and store in header
+
+        if (header.name[0] ==
+            '\0') {    // this indicates that we hit a footer block which means we reached EOF
+            break;
+        }
+
+        if (read_bytes != 512) {
+            printf(
+                "Read errror in get_archive_file_list\n");    // If we hit this something went
+                                                              // wrong. We should always be reading
+                                                              // 512 bytes because we should hit
+                                                              // the footer (break state) before we
+                                                              // read blocks smaller than 512
+            fclose(f);
+            return -1;
+        }
+
+        printf(header.name);    // list out file in archive
+        printf("\n");
+
+        // populate a new node with file data
+        node_t *new_file = malloc(sizeof(
+            node_t));    // needs to be freed when node is removed from ll or the ll is destroyed
+        if (new_file == NULL) {
+            printf("Malloc operation failed inside of get_archive_file_list");
+            fclose(f);
+            return -1;
+        }
+
+        strcpy(new_file->name, header.name);
+        new_file->next = NULL;
+
+        // update ll with new file and move to that file
+        if (files->head == NULL) {
+            files->head = new_file;
+        } else {
+            current->next = new_file;
+        }
+        current = new_file;
+        files->size++;
+
+        unsigned long int size = strtoul(
+            header.size, NULL, 8);    // identify file size from header (octal according to
+                                      // minitar.h). strtoul outputs an unsigned long integer
+
+        int gap = ceil((double) size / 512.0) *
+                  512;    // calculates the number of blocks to traverse,
+                          // then goes back to bytewise traversal distance in order for use in fseek
+
+        int seek = fseek(f, gap, SEEK_CUR);
+
+        if (seek != 0) {
+            printf("Seek error in get_archive_file_list\n");
+            fclose(f);
+            return -1;
+        }
+    }
+
+    fclose(f);    // success state;
     return 0;
 }
 
