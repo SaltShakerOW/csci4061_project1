@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
         if (missing) {
             fprintf(
                 stderr,
-                "Error: One or more of the specified files is not already present in archive.\n");
+                "Error: One or more of the specified files is not already present in archive\n");
             file_list_clear(&files);
             return 1;
         }

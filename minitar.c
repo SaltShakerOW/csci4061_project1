@@ -5,6 +5,7 @@
 #include <math.h>
 #include <pwd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
@@ -160,7 +161,7 @@ int create_archive(const char *archive_name, const file_list_t *files) {
             }
             FILE *data = fopen(file_name, "r");    // open file named in the file_list
             if (data == NULL) {                    // Check if open operation returned usable data
-                printf("Could not open file:", file_name);
+                printf("Could not open file: %s", file_name);
                 printf(". Moving on...\n");
                 current = current->next;
                 continue;
@@ -241,7 +242,7 @@ int create_archive(const char *archive_name, const file_list_t *files) {
     int zero_block[1024] = {0};
 
     size_t zero_count = fwrite(zero_block, 1, 1024, f);
-    if (zero_count == 1024) {
+    if (zero_count != 1024) {
         printf("Error writing the two footer trailing blocks.\n");
         fclose(f);
         return -1;
@@ -259,25 +260,24 @@ int append_files_to_archive(const char *archive_name,
     // create_archive. This includes header and data blocks for each file.
     // Step 4: Reapply footer
 
-    // Step 1: Open file
-    FILE *f = fopen(archive_name, "w");
-    if (f == NULL) {
-        fprint("Failed to open archive in append function");
-        return -1;
-    }
-
-    // Step 2: Remove footers
+    // Step 1: Remove footers first
     int footer_status =
         remove_trailing_bytes(archive_name, 1024);    // Remove 2 blocks worth of data
     if (footer_status != 0) {
-        fprint("Failed to remove footer in append function");
-        fclose(f);
+        printf("Failed to remove footer in append function");
+        return -1;
+    }
+
+    // Step 2: Open file in append mode
+    FILE *f = fopen(archive_name, "a");
+    if (f == NULL) {
+        printf("Failed to open archive in append function");
         return -1;
     }
 
     // Step 3: Append data
     if (files == NULL) {    // Check if user supplied files/if files exists at all
-        fprint("The provided file list is empty or doesn't exist.");
+        printf("The provided file list is empty or doesn't exist.");
         fclose(f);
         return -1;
     }
@@ -292,7 +292,7 @@ int append_files_to_archive(const char *archive_name,
         }
         FILE *data = fopen(file_name, "r");    // open file named in the file_list
         if (data == NULL) {                    // Check if open operation returned usable data
-            printf("Could not open file:", file_name);
+            printf("Could not open file: %s", file_name);
             printf(". Moving on...\n");
             current = current->next;
             continue;
@@ -358,6 +358,7 @@ int append_files_to_archive(const char *archive_name,
             }
         }
 
+        fclose(data);
         current = current->next;
     }
 
@@ -365,7 +366,7 @@ int append_files_to_archive(const char *archive_name,
     int zero_block[1024] = {0};
 
     size_t zero_count = fwrite(zero_block, 1, 1024, f);
-    if (zero_count == 1024) {
+    if (zero_count != 1024) {
         printf("Error writing the two footer trailing blocks.\n");
         fclose(f);
         return -1;
@@ -421,8 +422,8 @@ int get_archive_file_list(const char *archive_name, file_list_t *files) {
             return -1;
         }
 
-        printf(header.name);    // list out file in archive
-        printf("\n");
+        // printf("%s", header.name);    // list out file in archive
+        // printf("\n");
 
         // populate a new node with file data
         node_t *new_file = malloc(sizeof(
