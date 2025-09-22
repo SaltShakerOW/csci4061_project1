@@ -358,6 +358,7 @@ int append_files_to_archive(const char *archive_name,
             }
         }
 
+        fclose(data);
         current = current->next;
     }
 
