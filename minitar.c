@@ -468,6 +468,95 @@ int get_archive_file_list(const char *archive_name, file_list_t *files) {
 }
 
 int extract_files_from_archive(const char *archive_name) {
-    // TODO: Not yet implemented
+    // Open the archive for reading
+    FILE *f = fopen(archive_name, "r");
+    if (f == NULL) {
+        printf("Failed to open archive in extract function");
+        return -1;
+    }
+
+    tar_header header;
+
+    // Read through the archive, extracting each file
+    while (1) {
+        // Read the header block
+        size_t read_bytes = fread(&header, 1, 512, f);
+
+        // Check if we've reached the footer
+        if (header.name[0] == '\0') {
+            break;
+        }
+
+        // Check for read errors where we expect a full block
+        if (read_bytes != 512) {
+            printf("Read error in extract function\n");
+            fclose(f);
+            return -1;
+        }
+
+        // Extract file size from header
+        unsigned long int file_size = strtoul(header.size, NULL, 8);
+
+        // Create the output file
+        FILE *output = fopen(header.name, "w");
+        if (output == NULL) {
+            printf("Could not create file: %s. Moving on...\n", header.name);
+
+            // Skip the data blocks for this file
+            int gap = ceil((double) file_size / 512.0) * 512;
+            if (fseek(f, gap, SEEK_CUR) != 0) {
+                printf("Seek error while skipping file data\n");
+                fclose(f);
+                return -1;
+            }
+            continue;
+        }
+
+        // Extract the file data
+        unsigned long int remaining = file_size;
+        char buffer[512];
+
+        // Read and write in 512-byte chunks
+        while (remaining > 0) {
+            size_t bytes_read = fread(buffer, 1, 512, f);    // Always read full block
+
+            // Check for read errors where we expect a full block
+            if (bytes_read != 512) {
+                printf("Error reading file data for %s\n", header.name);
+                fclose(output);
+                fclose(f);
+                return -1;
+            }
+
+            // Write only the actual file data (not padding)
+            size_t to_write = remaining;
+            if (to_write >= 512) {
+                to_write = 512;
+            }
+
+            size_t bytes_written = fwrite(buffer, 1, to_write, output);
+
+            // Check for write errors where we expect to write 'to_write' bytes
+            if (bytes_written != to_write) {
+                printf("Error writing file data for %s\n", header.name);
+                fclose(output);
+                fclose(f);
+                return -1;
+            }
+
+            // Update remaining bytes to write
+            remaining -= to_write;
+        }
+
+        fclose(output);
+
+        // Set file permissions from header
+        mode_t mode = strtoul(header.mode, NULL, 8);
+        if (chmod(header.name, mode) != 0) {
+            printf("Warning: Could not set permissions for %s\n", header.name);
+        }
+    }
+
+    fclose(f);
     return 0;
 }
