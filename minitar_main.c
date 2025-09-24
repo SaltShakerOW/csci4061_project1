@@ -6,6 +6,7 @@
 
 // Prints list of files in a file list
 static void file_list_print(const file_list_t *lst) {
+    // Iterate through linked list and print each file name
     for (node_t *n = lst->head; n; n = n->next) {
         if (n->name)
             puts(n->name);
@@ -57,6 +58,7 @@ int main(int argc, char **argv) {
 
     // Populate file list if needed
     for (int i = 4; i < argc; i++) {
+        // Add each file to the file list
         if (file_list_add(&files, argv[i]) != 0) {
             perror("Error: failed to add file to list");
             file_list_clear(&files);
@@ -68,7 +70,10 @@ int main(int argc, char **argv) {
 
     // Create, append, list, update, or extract files from archive
     if (strcmp(op, "-c") == 0) {
+        // Create a new archive
         rc = create_archive(archive, &files);
+
+        // Check for errors during archive creation
         if (rc != 0) {
             file_list_clear(&files);
             return 1;
@@ -87,34 +92,46 @@ int main(int argc, char **argv) {
         file_list_t names;
         file_list_init(&names);
         rc = get_archive_file_list(archive, &names);
+        // Check for errors during listing
         if (rc != 0) {
             file_list_clear(&names);
             file_list_clear(&files);
             return 1;
         }
+
+        // Print the names of the files in the archive
         file_list_print(&names);
+        // Clean up
         file_list_clear(&names);
 
         // Update files in archive
     } else if (strcmp(op, "-u") == 0) {
+
         // Verify all requested files are already in archive
         file_list_t names;
         file_list_init(&names);
+        // Get current list of files in a temp list
         rc = get_archive_file_list(archive, &names);
+
+        // Check for errors during listing
         if (rc != 0) {
             file_list_clear(&names);
             file_list_clear(&files);
             return 1;
         }
+
         // Check if all files to be updated are present in the archive
         int missing = 0;
         for (node_t *n = files.head; n; n = n->next) {
+            // If any file is not found, mark as missing
             if (!file_list_contains(&names, n->name)) {
                 missing = 1;
                 break;
             }
         }
         file_list_clear(&names);
+
+        // If any files are missing, print error and exit
         if (missing) {
             fprintf(
                 stderr,
@@ -122,6 +139,8 @@ int main(int argc, char **argv) {
             file_list_clear(&files);
             return 1;
         }
+
+        // Proceed with update
         rc = append_files_to_archive(archive, &files);
         if (rc != 0) {
             file_list_clear(&files);
