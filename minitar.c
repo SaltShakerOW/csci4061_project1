@@ -125,16 +125,17 @@ int remove_trailing_bytes(const char *file_name, size_t nbytes) {
 }
 
 int create_archive(const char *archive_name, const file_list_t *files) {
-    //*files is a linked list of node_t nodes (see file_list.h)
-    //*archive_name is a null terminated array of characters that specifies the file name
+    /*
+     * Creates a .tar archive named [archive_name] that contains the files contained in [files].
+     * Returns 0 upon success, -1 upon error.
+     */
 
     if (archive_name == NULL) {    // check if archive_name is not null
-        printf("Archive name does not exist");
+        printf("Archive name does not exist\n");
         return -1;
     }
 
     // Step 1: Open the file we want to create (and check for errors)
-
     FILE *f = fopen(archive_name, "w");
     if (f == NULL) {
         printf("Failed to open file\n");
@@ -160,7 +161,7 @@ int create_archive(const char *archive_name, const file_list_t *files) {
                 continue;
             }
             FILE *data = fopen(file_name, "r");    // open file named in the file_list
-            if (data == NULL) {                    // Check if open operation returned usable data
+            if (data == NULL) {                    // Check if open operation returned any data
                 printf("Could not open file: %s", file_name);
                 printf(". Moving on...\n");
                 current = current->next;
@@ -180,7 +181,7 @@ int create_archive(const char *archive_name, const file_list_t *files) {
                 continue;
             }
             size_t header_write = fwrite(&header, 1, 512, f);
-            if (header_write != 512) {
+            if (header_write != 512) {    // Headers MUST be 512 bytes regardless of file data size
                 printf(
                     "Error occured while writing header to file (not 512 bytes written). Moving on "
                     "to next file...\n");
@@ -204,10 +205,12 @@ int create_archive(const char *archive_name, const file_list_t *files) {
 
             if (read_bytes > 0) {    // final read/write operation is done outside of loop because
                                      // loop breaks if the read is less than 512 bytes
-                size_t written = fwrite(buffer, 1, read_bytes,
-                                        f);    // writes only the amount read (could need padding)
+                size_t written =
+                    fwrite(buffer, 1, read_bytes,
+                           f);    // writes only the amount read (could need padding later)
 
-                if (written != read_bytes) {
+                if (written !=
+                    read_bytes) {    // mismatch indicates some kind of error in the write stage
                     printf("File write error. Moving on to next file...\n");
                     fclose(data);
                     break;
@@ -227,33 +230,41 @@ int create_archive(const char *archive_name, const file_list_t *files) {
                 }
             }
 
-            fclose(data);
+            fclose(data);    // success state
             current =
                 current->next;    // Get the next node in the file list if everything goes right...
         }
     } else {    // Error check to see if files linked list has any elements
-        printf("No files were included");
+        printf("No files were included for create_archive");
         fclose(f);
         return -1;
     }
 
-    // Extra step I forgot. Adding two 512 footer blocks to the end of the archive before we close
-    // out
+    // Extra step: Adding two 512 footer blocks to the end of the archive before we close out
     int zero_block[1024] = {0};
 
     size_t zero_count = fwrite(zero_block, 1, 1024, f);
-    if (zero_count != 1024) {
+    if (zero_count != 1024) {    // if we don't write 1024 zeros something went wrong
         printf("Error writing the two footer trailing blocks.\n");
         fclose(f);
         return -1;
     }
 
-    fclose(f);    // success state
+    int close = fclose(f);    // success state
+    if (close != 0) {
+        printf("Error while closing out file in create_archive");
+        return -1;
+    }
     return 0;
 }
 
 int append_files_to_archive(const char *archive_name,
                             const file_list_t *files) {    // reuse this code for update
+    /*
+     * Appends new files in [files] to an existing archive named [archive_name]
+     * Returns 0 upon success, -1 upon error.
+     */
+
     // Step 1: Open archive_name and figure out if it exists.
     // Step 2: Remove the existing minitar footer to get at the end of the actual data
     // Step 3: Append whatever data is in files to the archive using means established in
@@ -262,13 +273,13 @@ int append_files_to_archive(const char *archive_name,
 
     // Step 1: Remove footers first
     int footer_status =
-        remove_trailing_bytes(archive_name, 1024);    // Remove 2 blocks worth of data
+        remove_trailing_bytes(archive_name, 1024);    // Remove 2 blocks worth of footer data
     if (footer_status != 0) {
         printf("Failed to remove footer in append function");
         return -1;
     }
 
-    // Step 2: Open file in append mode
+    // Step 2: Open file in append mode (automatically positions cursor to EOF)
     FILE *f = fopen(archive_name, "a");
     if (f == NULL) {
         printf("Failed to open archive in append function");
@@ -372,11 +383,20 @@ int append_files_to_archive(const char *archive_name,
         return -1;
     }
 
-    fclose(f);    // success state
+    int close = fclose(f);    // success state
+    if (close != 0) {
+        printf("Error closing out file in append_files_to_archive");
+        return -1;
+    }
     return 0;
 }
 
 int get_archive_file_list(const char *archive_name, file_list_t *files) {
+    /*
+     * Generates a list of files contained in [archive_name]
+     * Returns 0 upon success, -1 upon error.
+     */
+
     // Here we need to parse the tar file, looking for headers to extract the names of the files
     // from.
 
@@ -397,7 +417,7 @@ int get_archive_file_list(const char *archive_name, file_list_t *files) {
     if (files->head != NULL) {
         node_t *current = files->head;
         while (current != NULL) {
-            current = current->next;    // traverse ll until we get to end
+            current = current->next;    // traverse ll until we set current to the end
         }
     }
 
@@ -422,13 +442,10 @@ int get_archive_file_list(const char *archive_name, file_list_t *files) {
             return -1;
         }
 
-        // printf("%s", header.name);    // list out file in archive
-        // printf("\n");
-
         // populate a new node with file data
         node_t *new_file = malloc(sizeof(
             node_t));    // needs to be freed when node is removed from ll or the ll is destroyed
-        if (new_file == NULL) {
+        if (new_file == NULL) {    // check if something goes wrong in creating a new node
             printf("Malloc operation failed inside of get_archive_file_list");
             fclose(f);
             return -1;
@@ -439,9 +456,9 @@ int get_archive_file_list(const char *archive_name, file_list_t *files) {
 
         // update ll with new file and move to that file
         if (files->head == NULL) {
-            files->head = new_file;
+            files->head = new_file;    // case if head is empty
         } else {
-            current->next = new_file;
+            current->next = new_file;    // every other case where we add to after current
         }
         current = new_file;
         files->size++;
@@ -454,9 +471,9 @@ int get_archive_file_list(const char *archive_name, file_list_t *files) {
                   512;    // calculates the number of blocks to traverse,
                           // then goes back to bytewise traversal distance in order for use in fseek
 
-        int seek = fseek(f, gap, SEEK_CUR);
+        int seek = fseek(f, gap, SEEK_CUR);    // move cursor to next header
 
-        if (seek != 0) {
+        if (seek != 0) {    // check if something goes wrong with seek
             printf("Seek error in get_archive_file_list\n");
             fclose(f);
             return -1;
